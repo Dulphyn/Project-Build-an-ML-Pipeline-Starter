@@ -50,9 +50,20 @@ def go(config: DictConfig):
             )
 
         if "basic_cleaning" in active_steps:
-            ##################
-            # Implement here #
-            ##################
+            # Perform basic cleaning and load in W&B
+            _ = mlflow.run(
+                f"src/basic_cleaning",
+                "main",
+                env_manager="conda",
+                parameters={
+                    "input_artifact": config["etl"]["sample"],
+                    "output_artifact": "clean_sample",
+                    "output_type":"clean_data",
+                    "output_description":"Cleaned sample",
+                    "min_price":config["etl"]["min_price"],
+                    "max_price":config["etl"]["max_price"]
+                },
+            )
             pass
 
         if "data_check" in active_steps:
