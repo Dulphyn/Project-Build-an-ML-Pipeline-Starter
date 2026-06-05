@@ -19,7 +19,6 @@ _steps = [
 #    "test_regression_model"
 ]
 
-
 # This automatically reads in the configuration
 @hydra.main(version_base=None, config_name='config', config_path='.')
 def go(config: DictConfig):
@@ -31,6 +30,9 @@ def go(config: DictConfig):
     # Steps to execute
     steps_par = config['main']['steps']
     active_steps = steps_par.split(",") if steps_par != "all" else _steps
+
+    # Get root directory
+    root=hydra.utils.get_original_cwd()
 
     # Move to a temporary directory
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -52,12 +54,15 @@ def go(config: DictConfig):
         if "basic_cleaning" in active_steps:
             # Perform basic cleaning and load in W&B
             _ = mlflow.run(
-                f"src/basic_cleaning",
-                "main",
-                env_manager="conda",
+                os.path.join(
+                    root,
+                    "src",
+                    "basic_cleaning"
+                    ),
+                    "main",
                 parameters={
-                    "input_artifact": config["etl"]["sample"],
-                    "output_artifact": "clean_sample",
+                    "input_artifact": "sample.csv:latest",
+                    "output_artifact": "clean_sample.csv",
                     "output_type":"clean_data",
                     "output_description":"Cleaned sample",
                     "min_price":config["etl"]["min_price"],
@@ -67,16 +72,35 @@ def go(config: DictConfig):
             pass
 
         if "data_check" in active_steps:
-            ##################
-            # Implement here #
-            ##################
+            _ = mlflow.run(
+                os.path.join(
+                    root,
+                    "src",
+                    "data_check"
+                ),
+                "main",
+                parameters={
+                    "csv":"clean_sample.csv:latest",
+                    "ref":"clean_sample.csv:reference",
+                    "kl_threshold":config["data_check"]["kl_threshold"],
+                    "min_price":config["etl"]["min_price"],
+                    "max_price":config["etl"]["max_price"]
+                },
+            )
             pass
 
         if "data_split" in active_steps:
-            ##################
-            # Implement here #
-            ##################
-            pass
+            _ = mlflow.run(
+                f"{config['main']['components_repository']}/train_val_test_split",
+                "main",
+                parameters={
+                    "input":"clean_sample.csv:latest",
+                    "test_size":config["modeling"]["test_size"],
+                    "random_seed":config["modeling"]["random_seed"],
+                    "stratify_by":config["modeling"]["stratify_by"]
+                },
+            )
+        pass
 
         if "train_random_forest" in active_steps:
 
@@ -91,15 +115,35 @@ def go(config: DictConfig):
             ##################
             # Implement here #
             ##################
+            _ = mlflow.run(
+                os.path.join(
+                    root,
+                    "src",
+                    "train_random_forest"
+                ),
+                "main",
+                parameters={
+                    "trainval_artifact":"trainval_data.csv:latest",
+                    "val_size":config["modeling"]["val_size"],
+                    "random_seed":config["modeling"]["random_seed"],
+                    "stratify_by":config["modeling"]["stratify_by"],
+                    "rf_config":rf_config,
+                    "max_tfidf_features":config["modeling"]["max_tfidf_features"],
+                    "output_artifact":"random_forest_export"
+                },
+            )
 
             pass
 
         if "test_regression_model" in active_steps:
-
-            ##################
-            # Implement here #
-            ##################
-
+            _ = mlflow.run(
+                f"{config['main']['components_repository']}/test_regression_model",
+                "main",
+                parameters={
+                    "mlflow_model":"random_forest_export:prod",
+                    "test_dataset":"test_data.csv:latest"
+                },
+            )
             pass
 
 
